@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LineChart, Line
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, LineChart, Line
 } from 'recharts';
-import { Account, AccountType, Transaction, TransactionType, Category, Budget, Currency, View, Investment, InvestmentType, SavingsInstrument, SavingsType, Goal, Asset, AssetCategory, Subscription, NetWorthHistoryEntry } from './types';
+import { Account, AccountType, Transaction, TransactionType, Category, Budget, View, Investment, InvestmentType, SavingsInstrument, SavingsType, Goal, Asset, AssetCategory, Subscription, NetWorthHistoryEntry } from './types';
 import { CURRENCIES, DEFAULT_CATEGORIES, ICONS, DEFAULT_ASSET_CATEGORIES } from './constants';
 import { getFinancialInsights, suggestCategory, fetchProductDetailsFromUrl, processReceiptImage, findSubscriptions } from './services/geminiService';
 
@@ -290,6 +290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addTransaction({
         date: new Date().toISOString(),
         description: `Contribution to goal: ${goal.name}`,
+        notes: '',
         amount,
         type: TransactionType.EXPENSE,
         accountId: fromAccountId,
@@ -579,7 +580,7 @@ const FloatingActionButton: React.FC<{
 // VIEW COMPONENTS
 
 const DashboardView: React.FC = () => {
-  const { transactions, accounts, budgets, categories, primaryCurrency, getCategoryById, getAccountById, netWorthHistory } = useFinance();
+  const { transactions, accounts, budgets, primaryCurrency, getCategoryById, getAccountById, netWorthHistory } = useFinance();
   const [showAccountBreakdown, setShowAccountBreakdown] = useState(false);
   const [isNetWorthVisible, setIsNetWorthVisible] = useState(true);
   
@@ -709,7 +710,7 @@ const DashboardView: React.FC = () => {
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={spendingData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} fill="#8884d8" paddingAngle={5} labelLine={false}>
-                  {spendingData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                  {spendingData.map((_, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} stroke={PIE_COLORS[index % PIE_COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: 'rgba(10, 10, 10, 0.8)', border: '1px solid #2A2A2A', borderRadius: '0.75rem', backdropFilter: 'blur(4px)' }} formatter={(value: number) => formatCurrency(value, primaryCurrency)} />
                 <Legend iconSize={10} wrapperStyle={{fontSize: '12px'}} />
@@ -1160,8 +1161,6 @@ const TransactionsView: React.FC = () => {
         setIsAddEditModalOpen(true);
     };
 
-    const openScannerModal = () => setIsScannerModalOpen(true);
-
     const closeModal = () => {
         setEditingTransaction(undefined);
         setPrefilledData(undefined);
@@ -1371,7 +1370,7 @@ const BudgetsView: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {budgetStatus.map(b => (
                     <Card key={b.id}>
-                        <div className="flex justify-between items-center"><h4 className="text-lg font-bold text-white">{b.categoryName}</h4><Button variant="danger" className="p-1.5" onClick={() => setBudgets(p => p.filter(i => i.id !== b.id))}>{ICONS.trash}</Button></div>
+                        <div className="flex justify-between items-center"><h4 className="text-lg font-bold text-white">{b.categoryName}</h4><Button variant="danger" className="p-1.5" onClick={() => window.confirm(`Are you sure you want to delete the budget for ${b.categoryName}?`) && setBudgets(p => p.filter(budget => budget.id !== b.id))}>{ICONS.trash}</Button></div>
                         <div className="mt-4">
                             <div className="w-full bg-base-300 rounded-full h-3"><div className={classNames("h-3 rounded-full text-[10px] text-white text-center flex items-center justify-center", b.progress > 85 ? 'bg-accent-error' : b.progress > 60 ? 'bg-accent-warning' : 'bg-gradient-to-r from-brand-gradient-from to-brand-gradient-to')} style={{ width: `${b.progress}%` }}></div></div>
                             <div className="mt-2 text-sm text-content-200"><span>Spent: {formatCurrency(b.spent, primaryCurrency)}</span><span className="mx-2">|</span><span>Remaining: <span className={b.remaining < 0 ? 'text-accent-error' : 'text-accent-success'}>{formatCurrency(b.remaining, primaryCurrency)}</span></span></div>
@@ -1503,7 +1502,7 @@ const InsightsView: React.FC = () => {
     useEffect(() => {
         if (import.meta.env.VITE_API_KEY) fetchInsights();
         else setInsights("This feature requires an API key. Please set the `VITE_API_KEY` environment variable to use AI insights.");
-    }, []);
+    }, [fetchInsights]);
 
     const InsightSkeleton = () => (
         <div className="space-y-6">
@@ -1525,7 +1524,7 @@ const InsightsView: React.FC = () => {
         <div className="animate-fade-in">
             <div className="flex justify-between items-center mb-8"><h2 className="text-3xl font-bold text-white">AI Financial Insights</h2><Button onClick={fetchInsights} disabled={isLoading}>{isLoading ? 'Analyzing...' : 'Refresh Insights'}</Button></div>
             <Card hasGlow>
-                {isLoading ? <InsightSkeleton /> : <div className="prose prose-invert max-w-none text-content-100 leading-relaxed space-y-2" dangerouslySetInnerHTML={{ __html: insights.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>').replace(/## (.*)/g, '<h2 class="text-xl font-bold mt-6 mb-2 text-white">$1</h2>').replace(/# (.*)/g, '<h1 class="text-2xl font-bold mt-8 mb-3 text-white">$1</h1>').replace(/\* (.*)/g, '<li class="ml-5 list-disc">$1</li>').replace(/(\<li\>.*\<\/li\>)+/g, '<ul>$&</ul>').replace(/\n/g, '<br />') }}></div>}
+                {isLoading ? <InsightSkeleton /> : <div className="prose prose-invert max-w-none text-content-100 leading-relaxed space-y-2" dangerouslySetInnerHTML={{ __html: insights.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>').replace(/## (.*)/g, '<h2 class="text-xl font-bold mt-6 mb-2 text-white">$1</h2>').replace(/# (.*)/g, '<h1 class="text-2xl font-bold mt-8 mb-3 text-white">$1</h1>').replace(/\* (.*)/g, '<li class="ml-5 list-disc">$1</li>').replace(/(<li>.*<\/li>)+/g, '<ul>$&</ul>').replace(/\n/g, '<br />') }}></div>}
             </Card>
         </div>
     );
@@ -1624,7 +1623,7 @@ const SavingsView: React.FC = () => {
             </div>
             {filteredSavings.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredSavings.map(s => (
-                    <Card key={s.id}><div className="flex flex-col h-full"><div className="flex justify-between items-start gap-2"><div className="flex-1"><h3 className="text-lg font-bold text-white truncate pr-2" title={s.bankName}>{s.bankName}</h3><p className="text-sm text-content-200 truncate pr-2">{s.accountNumber}</p></div><div className="flex gap-1.5 flex-shrink-0"><Button variant="secondary" className="p-1.5" onClick={() => openModal(s)}>{ICONS.edit}</Button><Button variant="danger" className="p-1.5" onClick={() => window.confirm(`Delete this saving instrument?`) && deleteSaving(s.id)}>{ICONS.trash}</Button></div></div><div className="flex-grow mt-3 pt-3 border-t border-base-300 grid grid-cols-2 gap-y-2 gap-x-4 text-sm"><div><span className="text-content-200 block">{s.type === SavingsType.RD ? "Installment" : "Principal"}</span> <span className="font-semibold text-white text-base">{formatCurrency(s.principal, primaryCurrency)}</span></div><div><span className="text-content-200 block">Interest Rate</span> <span className="font-semibold text-white text-base">{s.interestRate}%</span></div><div><span className="text-content-200 block">Deposit Date</span> <span className="font-semibold text-white">{formatDate(s.depositDate)}</span></div><div><span className="text-content-200 block">Maturity Date</span> <span className="font-semibold text-white">{formatDate(s.maturityDate)}</span></div></div></div></Card>
+                    <Card key={s.id}><div className="flex flex-col h-full"><div className="flex justify-between items-start gap-2"><div className="flex-1"><h3 className="text-lg font-bold text-white truncate pr-2" title={s.bankName}>{s.bankName}</h3><p className="text-sm text-content-200 truncate pr-2">{s.accountNumber}</p></div><div className="flex gap-1.5 flex-shrink-0"><Button variant="secondary" className="p-1.5" onClick={() => openModal(s)}>{ICONS.edit}</Button><Button variant="danger" className="p-1.5" onClick={() => window.confirm(`Are you sure you want to delete this saving instrument?`) && deleteSaving(s.id)}>{ICONS.trash}</Button></div></div><div className="flex-grow mt-3 pt-3 border-t border-base-300 grid grid-cols-2 gap-y-2 gap-x-4 text-sm"><div><span className="text-content-200 block">{s.type === SavingsType.RD ? "Installment" : "Principal"}</span> <span className="font-semibold text-white text-base">{formatCurrency(s.principal, primaryCurrency)}</span></div><div><span className="text-content-200 block">Interest Rate</span> <span className="font-semibold text-white text-base">{s.interestRate}%</span></div><div><span className="text-content-200 block">Deposit Date</span> <span className="font-semibold text-white">{formatDate(s.depositDate)}</span></div><div><span className="text-content-200 block">Maturity Date</span> <span className="font-semibold text-white">{formatDate(s.maturityDate)}</span></div></div></div></Card>
                 ))}</div>
             ) : <div className="text-center py-16"><p className="text-content-200">{savings.length > 0 ? "No savings match search." : "No FDs or RDs found."}</p></div>}
             <Modal isOpen={isModalOpen} onClose={closeModal} title={editingSaving ? 'Edit Savings' : 'Add Savings'}><SavingsForm onClose={closeModal} existingSaving={editingSaving}/></Modal>
@@ -1752,17 +1751,17 @@ const AssetsView: React.FC = () => {
 
             {assets.length > 0 ? (
                 <div className="space-y-8">
-                    {assetsByCategory.map(([categoryName, assets]) => (
+                    {assetsByCategory.map(([categoryName, categoryAssets]) => (
                         <div key={categoryName}>
                             <h3 className="text-2xl font-bold text-white mb-4 border-b border-base-300 pb-2">{categoryName}</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                {assets.map(asset => (
+                                {categoryAssets.map(asset => (
                                     <Card key={asset.id} className="p-0 flex flex-col group">
                                         <img src={asset.imageUrl || `https://via.placeholder.com/300x200/1A1A1A/A1A1A1?text=${encodeURIComponent(asset.name)}`} alt={asset.name} className="w-full h-40 object-cover rounded-t-2xl"/>
                                         <div className="p-4 flex flex-col flex-grow">
                                             <div className="flex justify-between items-start gap-2">
                                                 <h4 className="font-bold text-white flex-1 truncate" title={asset.name}>{asset.name}</h4>
-                                                <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="secondary" className="p-1.5" onClick={() => openModal(asset)}>{ICONS.edit}</Button><Button variant="danger" className="p-1.5" onClick={() => window.confirm(`Delete asset: ${asset.name}?`) && deleteAsset(asset.id)}>{ICONS.trash}</Button></div>
+                                                <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"><Button variant="secondary" className="p-1.5" onClick={() => openModal(asset)}>{ICONS.edit}</Button><Button variant="danger" className="p-1.5" onClick={() => window.confirm(`Are you sure you want to delete asset: ${asset.name}?`) && deleteAsset(asset.id)}>{ICONS.trash}</Button></div>
                                             </div>
                                             <p className="text-xl font-light text-white mt-2">{formatCurrency(asset.purchasePrice, primaryCurrency)}</p>
                                             <div className="text-sm text-content-200 mt-2 flex-grow">
@@ -1809,7 +1808,9 @@ const SubscriptionsView: React.FC = () => {
         
         let lastPaymentDate;
         try {
-            lastPaymentDate = new Date(potentialSub.lastPaymentDate);
+            // Fix for dates that might not have hyphens
+            const dateStr = potentialSub.lastPaymentDate.replace(/\s/g, '-');
+            lastPaymentDate = new Date(dateStr);
             if (isNaN(lastPaymentDate.getTime())) throw new Error("Invalid date");
         } catch(e) {
             console.error("Invalid last payment date from Gemini:", potentialSub.lastPaymentDate);
@@ -1820,7 +1821,12 @@ const SubscriptionsView: React.FC = () => {
         const nextPaymentDate = new Date(lastPaymentDate);
         
         if (potentialSub.frequency === 'monthly') {
+            const originalDay = nextPaymentDate.getDate();
             nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+            // If the day changed, it means we rolled over, so go to the last day of the correct month
+            if (nextPaymentDate.getDate() !== originalDay) {
+                nextPaymentDate.setDate(0);
+            }
         } else if (potentialSub.frequency === 'yearly') {
             nextPaymentDate.setFullYear(nextPaymentDate.getFullYear() + 1);
         } else { // weekly

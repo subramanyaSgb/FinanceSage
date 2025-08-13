@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction, Category, TransactionType, Account, Asset, Subscription } from './types';
+import { Transaction, Category, TransactionType, Account, Asset, Subscription } from '../types';
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 
@@ -49,7 +50,7 @@ export const getFinancialInsights = async (
       model: "gemini-2.5-flash",
       contents: prompt,
     });
-    return response.text;
+    return response.text || "Sorry, I couldn't generate insights at this moment.";
   } catch (error) {
     console.error("Error fetching financial insights:", error);
     return "Sorry, I couldn't fetch your financial insights at the moment. Please try again later.";
@@ -95,8 +96,13 @@ export const suggestCategory = async (
 
     const jsonText = response.text;
     if (jsonText) {
-      const result = JSON.parse(jsonText);
-      return result.category || null;
+        try {
+            const result = JSON.parse(jsonText);
+            return result.category || null;
+        } catch(e) {
+            console.error("Failed to parse category suggestion JSON:", e);
+            return null;
+        }
     }
     return null;
   } catch (error) {
@@ -134,14 +140,19 @@ export const fetchProductDetailsFromUrl = async (url: string): Promise<Partial<A
         
         const jsonText = response.text;
         if(jsonText){
-            const result = JSON.parse(jsonText);
-            return {
-                name: result.name,
-                description: result.description,
-                purchasePrice: result.purchasePrice,
-                imageUrl: result.imageUrl,
-                productUrl: url,
-            };
+             try {
+                const result = JSON.parse(jsonText);
+                return {
+                    name: result.name,
+                    description: result.description,
+                    purchasePrice: result.purchasePrice,
+                    imageUrl: result.imageUrl,
+                    productUrl: url,
+                };
+             } catch(e) {
+                console.error("Failed to parse product details JSON:", e);
+                return null;
+             }
         }
         return null;
 
@@ -185,7 +196,12 @@ export const processReceiptImage = async (
         });
         const jsonText = response.text;
         if (jsonText) {
-            return JSON.parse(jsonText);
+             try {
+                return JSON.parse(jsonText);
+             } catch(e) {
+                console.error("Failed to parse receipt JSON:", e);
+                return null;
+             }
         }
         return null;
     } catch (error) {
@@ -222,7 +238,7 @@ export const findSubscriptions = async (transactions: Transaction[], categories:
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
-                 systemInstruction: "You are an AI assistant specialized in finding recurring payments from transaction data. You must only output a valid JSON object matching the provided schema.",
+                systemInstruction: "You are an AI assistant specialized in finding recurring payments from transaction data. You must only output a valid JSON object matching the provided schema. If no subscriptions are found, return an empty array.",
                 responseMimeType: "application/json",
                 responseSchema: {
                     type: Type.OBJECT,
@@ -250,8 +266,13 @@ export const findSubscriptions = async (transactions: Transaction[], categories:
 
         const jsonText = response.text;
         if (jsonText) {
-            const result = JSON.parse(jsonText);
-            return result.subscriptions || [];
+            try {
+                const result = JSON.parse(jsonText);
+                return result.subscriptions || [];
+            } catch(e) {
+                console.error("Failed to parse subscriptions JSON:", e);
+                return [];
+            }
         }
         return [];
     } catch (error) {
